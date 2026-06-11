@@ -1,0 +1,30 @@
+name: Trigger Maven Release Snapshot
+
+on:
+  workflow_call:
+    inputs:
+      snapshot_url:
+        description: 'The Maven Snapshot Repository URL'
+        required: true
+        type: string
+
+jobs:
+  trigger-maven-release-snapshot:
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Clone CI Scripts
+        run: |
+          rm -rf ci-templates-public
+          git clone https://github.com/unit-corp/ci-templates-public.git ci-templates-public
+
+      - name: Clone Project Source Code
+        run: |
+          rm -rf ${{ github.event.repository.name }}          
+          git clone https://github.com/${{ github.repository }}.git --branch ${{ github.ref_name }} --single-branch
+
+      - name: Execute Maven Release Snapshot
+        run: |
+          chmod +x ci-templates-public/scripts/maven-release-snapshot.sh
+          export MAVEN_SNAPSHOT_URL="${{ inputs.snapshot_url }}"
+          ./ci-templates-public/scripts/maven-release-snapshot.sh
