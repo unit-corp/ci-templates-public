@@ -1,0 +1,40 @@
+name: Trigger Maven Central Release
+
+# Maven deploy for a branch or a release tag.
+on:
+  workflow_call:
+    inputs:
+      tag_prefixes:
+        description: 'Release tag prefixes'
+        required: false
+        default: 'legacy-v v'
+        type: string
+      snapshot_url:
+        description: 'Snapshot repository URL'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  trigger-maven-central-release:
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Clone CI Scripts
+        run: |
+          rm -rf ci-templates-public
+          git clone https://github.com/unit-corp/ci-templates-public.git ci-templates-public
+
+      - name: Clone Project Source Code
+        run: |
+          rm -rf ${{ github.event.repository.name }}
+          git clone https://github.com/${{ github.repository }}.git --branch ${{ github.ref_name }} --single-branch
+
+      - name: Execute Maven Deploy
+        working-directory: ${{ github.event.repository.name }}
+        run: |
+          chmod +x ../ci-templates-public/scripts/maven-central-release.sh
+          ../ci-templates-public/scripts/maven-central-release.sh
+        env:
+          TAG_PREFIXES: ${{ inputs.tag_prefixes }}
+          MAVEN_SNAPSHOT_URL: ${{ inputs.snapshot_url }}
