@@ -3,17 +3,6 @@ name: Trigger Maven Central Release
 # Maven deploy for a branch or a release tag.
 on:
   workflow_call:
-    inputs:
-      tag_prefixes:
-        description: 'Release tag prefixes'
-        required: false
-        default: 'legacy-v v'
-        type: string
-      snapshot_url:
-        description: 'Snapshot repository URL'
-        required: false
-        default: ''
-        type: string
 
 jobs:
   trigger-maven-central-release:
@@ -36,5 +25,6 @@ jobs:
           chmod +x ../ci-templates-public/scripts/maven-central-release.sh
           ../ci-templates-public/scripts/maven-central-release.sh
         env:
-          TAG_PREFIXES: ${{ inputs.tag_prefixes }}
-          MAVEN_SNAPSHOT_URL: ${{ inputs.snapshot_url }}
+          TAG_PREFIXES: ${{ vars.TAG_PREFIXES }}
+          MAVEN_SNAPSHOT_URL: ${{ vars.MAVEN_SNAPSHOT_URL }}
+          ALLOWED_BRANCH_PATTERNS: ${{ vars.ALLOWED_BRANCH_PATTERNS }}

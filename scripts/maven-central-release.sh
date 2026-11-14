@@ -6,17 +6,21 @@
 # Usage:
 #   maven-central-release.sh [--dry-run]
 #
+# Environment supplied by GitHub Actions organization or repository variables:
+#   TAG_PREFIXES        release tag prefixes, required for a tag build
+#   MAVEN_SNAPSHOT_URL  snapshot repository URL, required for a branch deploy
+#
 # Environment (optional):
-#   TAG_PREFIXES     release tag prefixes, default "legacy-v v"
-#   DEPLOY_PROFILE   Maven profile used for a tag build
-#   NEXUS_SERVER_ID  Maven server id used for a branch build
-#   MAVEN_SNAPSHOT_URL  snapshot repository URL used for a branch build
+#   ALLOWED_BRANCH_PATTERNS  whitespace-separated regular expressions used to validate branch names
+#   DEPLOY_PROFILE           Maven profile used for a tag build
+#   NEXUS_SERVER_ID          Maven server id used for a branch build
 #
 # The script never reads, writes or prints credentials.
 
 set -euo pipefail
 
-TAG_PREFIXES="${TAG_PREFIXES:-legacy-v v}"
+TAG_PREFIXES="${TAG_PREFIXES:-}"
+ALLOWED_BRANCH_PATTERNS="${ALLOWED_BRANCH_PATTERNS:-}"
 VERSION_PATTERN='[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?'
 DEPLOY_PROFILE="${DEPLOY_PROFILE:-central-publishing}"
 NEXUS_SERVER_ID="${NEXUS_SERVER_ID:-maven-private}"
@@ -45,10 +49,15 @@ run() {
 
 # Prints the version of a release tag (<prefix><version>), or nothing if the tag does not follow the pattern.
 version_from_tag() {
-  local tag="$1" prefix
+  local tag="$1" prefix version
   for prefix in $TAG_PREFIXES; do
-    if [[ "$tag" =~ ^${prefix}(${VERSION_PATTERN})$ ]]; then
-      echo "${BASH_REMATCH[1]}"
+    if [[ "$tag" == "$prefix"* ]]; then
+      version="${tag#"$prefix"}"
+    else
+      continue
+    fi
+    if [[ "$version" =~ ^${VERSION_PATTERN}$ ]]; then
+      echo "$version"
       return 0
     fi
   done
@@ -59,9 +68,27 @@ project_version() {
   mvn -B -q -DforceStdout help:evaluate -Dexpression=project.version
 }
 
+branch_is_allowed() {
+  local branch="$1" pattern
+
+  [ -z "$ALLOWED_BRANCH_PATTERNS" ] && return 0
+
+  for pattern in $ALLOWED_BRANCH_PATTERNS; do
+    if [[ "$branch" =~ $pattern ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Tag build.
 deploy_to_central() {
   local tag="$1" tag_version pom_version
+
+  if [ -z "$TAG_PREFIXES" ]; then
+    echo "ERROR: TAG_PREFIXES is required for a tag build" >&2
+    exit 1
+  fi
 
   if ! tag_version="$(version_from_tag "$tag")"; then
     echo "ERROR: tag '$tag' is not a release tag; expected one of: $(for p in $TAG_PREFIXES; do printf '%s<major>.<minor>.<patch> ' "$p"; done)" >&2
@@ -81,6 +108,11 @@ deploy_to_central() {
 # Branch build.
 deploy_to_nexus() {
   local branch="$1" pom_version
+
+  if ! branch_is_allowed "$branch"; then
+    echo "ERROR: branch '$branch' does not match ALLOWED_BRANCH_PATTERNS: '$ALLOWED_BRANCH_PATTERNS'" >&2
+    exit 1
+  fi
 
   if [ -z "${MAVEN_SNAPSHOT_URL:-}" ] && [ "$DRY_RUN" = false ]; then
     echo "ERROR: MAVEN_SNAPSHOT_URL is not set (needed to deploy branch '$branch')" >&2
